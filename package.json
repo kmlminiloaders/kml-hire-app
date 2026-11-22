@@ -1,0 +1,11 @@
+{
+  "name": "kml-hire-manager-api",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 execute kml-hire-db --remote --file=./schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
