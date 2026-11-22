@@ -1,0 +1,50 @@
+name: Validate KML quote app
+
+on:
+  push:
+    branches: [main, feature/quotes-and-bookings]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check Worker JavaScript syntax
+        run: node --check src/worker.js
+      - name: Check app inline JavaScript syntax
+        run: |
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          class Scripts(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.in_script = False
+                  self.parts = []
+                  self.current = []
+              def handle_starttag(self, tag, attrs):
+                  if tag == "script":
+                      self.in_script = True
+                      self.current = []
+              def handle_data(self, data):
+                  if self.in_script:
+                      self.current.append(data)
+              def handle_endtag(self, tag):
+                  if tag == "script" and self.in_script:
+                      self.parts.append("".join(self.current))
+                      self.in_script = False
+          p = Scripts()
+          p.feed(open("index.html", encoding="utf-8").read())
+          open("/tmp/kml-app.js", "w", encoding="utf-8").write(p.parts[-1])
+          PY
+          node --check /tmp/kml-app.js
+      - name: Validate D1 SQL migration
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sqlite3
+          sqlite3 /tmp/kml-test.db < schema.sql
+          sqlite3 /tmp/kml-test.db ".schema quotes"
