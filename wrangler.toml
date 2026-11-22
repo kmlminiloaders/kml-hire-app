@@ -1,0 +1,15 @@
+name = "kml-hire-api"
+main = "src/worker.js"
+compatibility_date = "2026-11-22"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kml-hire-db"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+[vars]
+APP_ORIGIN = "https://kmlminiloaders.github.io"
+BUSINESS_NAME = "Kendenup Mini Loaders"
+BUSINESS_PHONE = "0413 195 915"
+BUSINESS_EMAIL = "shaun@kmlminiloaders.com.au"
+CURRENCY = "AUD"
