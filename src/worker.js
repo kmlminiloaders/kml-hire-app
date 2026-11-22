@@ -55,6 +55,7 @@ export default {
    const subject="KML quote accepted: "+q.quote_number;
    const body="<p>Quote <b>"+esc(q.quote_number)+"</b> has been accepted by "+esc(String(b.name).trim())+".</p><p>Customer: "+esc(q.customer)+"<br>Total: "+aud(q.total)+"<br>Accepted: "+esc(at)+"</p>";
    await sendEmail(env,env.OWNER_EMAIL,subject,body,"Quote "+q.quote_number+" accepted by "+b.name+". Total "+aud(q.total)+".");
+    await sendEmail(env,q.email,"KML booking request received: "+q.quote_number,"<p>Thanks "+esc(String(b.name).trim())+".</p><p>KML Mini Loaders has received your acceptance of quote <b>"+esc(q.quote_number)+"</b> for "+aud(q.total)+". We will be in touch to confirm scheduling and any deposit arrangements.</p><p>Call "+esc(env.BUSINESS_PHONE||"0413 195 915")+" if you have any questions.</p>","Thanks "+b.name+". KML Mini Loaders has received your acceptance of quote "+q.quote_number+". We will be in touch to confirm scheduling.");
    return json({ok:true,status:"accepted"},200,env);
   }
   if(path.startsWith("/api/")){
