@@ -1,0 +1,13 @@
+{
+  "name": "KML Hire Manager",
+  "short_name": "KML Hire",
+  "description": "Kendenup Mini Loaders hire and business manager",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101719",
+  "theme_color": "#101719",
+  "icons": [
+    { "src": "./kml-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
