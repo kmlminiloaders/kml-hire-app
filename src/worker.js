@@ -75,7 +75,7 @@ export default {
    }
    const sendMatch=path.match(/^\/api\/quotes\/([^/]+)\/send$/);
    if(sendMatch&&req.method==="POST"){
-    const q=await env.DB.prepare("SELECT * FROM quotes WHERE id=?").bind(sendMatch[1]).first();if(!q)return json({error:"Quote not found"},404,env);
+    const q=await env.DB.prepare("SELECT * FROM quotes WHERE id=?").bind(sendMatch[1]).first();if(!q)return json({error:"Quote not found"},404,env);if(q.status!=="draft")return json({error:"Only draft quotes can be sent. This quote is already "+q.status+"."},409,env);
     const link=url.origin+"/q/"+q.token;const total=aud(q.total);
     const lines=JSON.parse(q.items_json||"[]").map(x=>x.description+" — "+aud(x.amount)).join("\n");
     const textBody="KML Mini Loaders quote "+q.quote_number+"\nHi "+q.customer+",\n\n"+lines+"\nTotal: "+total+"\nView and accept your quote: "+link+"\n\nQuestions? Call "+(env.BUSINESS_PHONE||"KML Mini Loaders");
