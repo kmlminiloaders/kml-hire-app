@@ -19,7 +19,7 @@ async function sendEmail(env,to,subject,htmlBody,textBody){
 async function sendSms(env,to,body){
  if(!env.TWILIO_ACCOUNT_SID||!env.TWILIO_AUTH_TOKEN||!env.TWILIO_PHONE||!to)return false;
  const auth=btoa(env.TWILIO_ACCOUNT_SID+":"+env.TWILIO_AUTH_TOKEN);
- const form=new URLSearchParams({From:env.TWILIO_PHONE,To:to,Body:body});
+ let recipient=String(to).replace(/[^0-9+]/g,"");if(recipient.startsWith("0"))recipient="+61"+recipient.slice(1);else if(recipient.startsWith("61"))recipient="+"+recipient;const form=new URLSearchParams({From:env.TWILIO_PHONE,To:recipient,Body:body});
  const r=await fetch("https://api.twilio.com/2010-04-01/Accounts/"+env.TWILIO_ACCOUNT_SID+"/Messages.json",{method:"POST",headers:{"Authorization":"Basic "+auth,"Content-Type":"application/x-www-form-urlencoded"},body:form});
  return r.ok;
 }
