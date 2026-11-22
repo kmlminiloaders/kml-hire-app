@@ -10,7 +10,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",
 const aud = n => new Intl.NumberFormat("en-AU",{style:"currency",currency:"AUD"}).format(Number(n)||0);
 const now = () => new Date().toISOString();
 const token = () => Array.from(crypto.getRandomValues(new Uint8Array(24)),b=>b.toString(16).padStart(2,"0")).join("");
-async function admin(req,env){const got=req.headers.get("X-KML-Key")||"";if(!env.KML_ADMIN_KEY||got.length!==env.KML_ADMIN_KEY.length)return false;return await crypto.subtle.timingSafeEqual(new TextEncoder().encode(got),new TextEncoder().encode(env.KML_ADMIN_KEY));}
+async function admin(req,env){const got=req.headers.get("X-KML-Key")||"",want=env.KML_ADMIN_KEY||"";if(!want||got.length!==want.length)return false;let diff=0;for(let i=0;i<got.length;i++)diff|=got.charCodeAt(i)^want.charCodeAt(i);return diff===0;}
 async function sendEmail(env,to,subject,htmlBody,textBody){
  if(!env.RESEND_API_KEY||!to)return false;
  const r=await fetch("https://api.resend.com/emails",{method:"POST",headers:{"Authorization":"Bearer "+env.RESEND_API_KEY,"Content-Type":"application/json"},body:JSON.stringify({from:env.EMAIL_FROM||"KML Mini Loaders <quotes@kmlminiloaders.com.au>",to:[to],subject,html:htmlBody,text:textBody})});
