@@ -5,7 +5,7 @@ compatibility_date = "2026-11-22"
 [[d1_databases]]
 binding = "DB"
 database_name = "kml-hire-db"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "7ff07807-a3a8-4b66-bb0c-1b6d6e4bb005"
 
 [vars]
 APP_ORIGIN = "https://kmlminiloaders.github.io"
