@@ -30,7 +30,7 @@ function quotePage(q,env){
  return html(`<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101719"><title>KML Quote ${esc(q.quote_number)}</title>
  <style>*{box-sizing:border-box}body{margin:0;background:#101719;color:#f4f7f7;font:16px system-ui;padding:18px}.wrap{max-width:680px;margin:auto}.card{background:#192326;border:1px solid #344447;border-radius:16px;padding:20px;margin:14px 0}.brand{color:#16b7ad;font-weight:800;letter-spacing:1px}.muted{color:#a9b8b8;font-size:13px}h1{font-size:24px;margin:8px 0}table{width:100%;border-collapse:collapse;margin:20px 0}td,th{text-align:left;padding:12px 6px;border-bottom:1px solid #344447}th{color:#a9b8b8}.total{font-size:28px;font-weight:800;color:#16b7ad;text-align:right}.btn{background:#16b7ad;color:#062321;border:0;border-radius:10px;padding:14px 18px;font-size:17px;font-weight:800;width:100%;margin-top:14px}input{width:100%;padding:13px;border-radius:9px;border:1px solid #344447;background:#0d1416;color:white;margin:7px 0 14px}label{font-size:14px;color:#c7d2d2}.success{color:#75d6a5;font-weight:800}</style>
  <div class="wrap"><div class="card"><div class="brand">KML · KENDENUP MINI LOADERS</div><p class="muted">QUOTE ${esc(q.quote_number)}</p><h1>Hire quote</h1><p>Prepared for <b>${esc(q.customer)}</b></p><p class="muted">Quote date: ${esc(q.created_at.slice(0,10))} · Job date: ${esc(q.job_date||"To be confirmed")}</p><p>${esc(q.description||"Mini loader hire")}</p><p class="muted">${esc(q.location||"")}</p><table><thead><tr><th>Description</th><th>Qty</th><th>Amount</th></tr></thead><tbody>${rows}</tbody></table><div class="total">Total: ${aud(q.total)}</div><p class="muted">GST is not charged unless shown and KML is registered for GST.</p>${q.notes?'<p><b>Notes:</b> '+esc(q.notes)+'</p>':""}${q.terms?'<p><b>Terms:</b><br>'+esc(q.terms).replace(/\n/g,"<br>")+'</p>':""}<p class="muted">Questions? Call ${esc(env.BUSINESS_PHONE||"KML Mini Loaders")}.</p></div>
- <div class="card">${accepted?'<p class="success">✓ QUOTE ACCEPTED</p><p>Thank you, '+esc(q.accepted_by)+'. Your acceptance was recorded on '+esc(q.accepted_at)+'. KML Mini Loaders has been notified.</p>':q.status==="declined"?'<p>This quote has been declined.</p>':'<h2>Accept this quote</h2><p class="muted">By accepting, you confirm that you agree to the quote and the terms shown above.</p><form id="accept"><label>Your full name</label><input name="name" required maxlength="120" autocomplete="name"><label><input type="checkbox" name="agree" required style="width:auto"> I accept this quote and the terms above.</label><button class="btn">ACCEPT QUOTE</button><p id="msg" class="muted"></p></form>'}</div>
+ <div class="card">${accepted?'<p class="success">✓ QUOTE ACCEPTED</p><p>Thank you, '+esc(q.accepted_by)+'. Your acceptance was recorded on '+esc(q.accepted_at)+'.</p>':q.status==="declined"?'<p>This quote has been declined.</p>':'<h2>Accept this quote</h2><p class="muted">By accepting, you confirm that you agree to the quote and the terms shown above.</p><form id="accept"><label>Your full name</label><input name="name" required maxlength="120" autocomplete="name"><label><input type="checkbox" name="agree" required style="width:auto"> I accept this quote and the terms above.</label><button class="btn">ACCEPT QUOTE</button><p id="msg" class="muted"></p></form>'}</div>
  <p class="muted" style="text-align:center">KML Mini Loaders · Kendenup, Western Australia · ${esc(env.BUSINESS_PHONE||"")}</p></div>
  ${accepted||q.status==="declined"?"":'<script>document.getElementById("accept").addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.target);const b=document.querySelector("button");b.disabled=true;b.textContent="Submitting...";try{const r=await fetch("/api/accept/'+q.token+'",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:f.get("name"),agree:f.get("agree")==="on"})});const d=await r.json();if(!r.ok)throw Error(d.error||"Could not submit");location.reload()}catch(x){document.getElementById("msg").textContent=x.message;b.disabled=false;b.textContent="ACCEPT QUOTE"}})</script>'}
  </html>`);
@@ -74,6 +74,20 @@ export default {
     .bind(id,qn,tok,String(b.customer).slice(0,160),b.email||null,b.phone||null,b.jobDate||null,b.hireType||"wet",b.description||"",b.location||"",Number(b.hours)||null,Number(b.days)||null,JSON.stringify(b.items),subtotal,subtotal,b.notes||"",b.terms||"",created).run();
     return json({id,quoteNumber:qn,status:"draft",total:subtotal},201,env);
    }
+   const shareMatch=path.match(/^\/api\/quotes\/([^/]+)\/share$/);
+   if(shareMatch&&req.method==="POST"){
+    const id=shareMatch[1];
+    const quote=await env.DB.prepare(
+     "UPDATE quotes SET status='sent', sent_at=COALESCE(sent_at, ?) WHERE id=? AND status IN ('draft','sent') RETURNING token,status,sent_at"
+    ).bind(now(),id).first();
+    if(!quote){
+     const existing=await env.DB.prepare("SELECT status FROM quotes WHERE id=?").bind(id).first();
+     return existing
+      ?json({error:"Only draft or sent quotes can be shared."},409,env)
+      :json({error:"Quote not found"},404,env);
+    }
+    return json({status:quote.status,sentAt:quote.sent_at,acceptUrl:url.origin+"/q/"+quote.token},200,env);
+   }
    const sendMatch=path.match(/^\/api\/quotes\/([^/]+)\/send$/);
    if(sendMatch&&req.method==="POST"){
     const q=await env.DB.prepare("SELECT * FROM quotes WHERE id=?").bind(sendMatch[1]).first();if(!q)return json({error:"Quote not found"},404,env);if(q.status!=="draft")return json({error:"Only draft quotes can be sent. This quote is already "+q.status+"."},409,env);
@@ -84,7 +98,7 @@ export default {
     if(q.email)emailOk=await sendEmail(env,q.email,"Your KML Mini Loaders quote "+q.quote_number,"<p>Hi "+esc(q.customer)+",</p><p>Your KML Mini Loaders quote is ready.</p><p><b>Total: "+total+"</b></p><p><a href='"+link+"'>View and accept your quote</a></p><p>"+esc(env.BUSINESS_PHONE||"")+"</p>",textBody);
     if(q.phone)smsOk=await sendSms(env,q.phone,"KML quote "+q.quote_number+" for "+total+". View and accept: "+link);
     if(!emailOk&&!smsOk)return json({error:"No message was sent. Check customer email/mobile and configure Resend/Twilio secrets."},502,env);
-    await env.DB.prepare("UPDATE quotes SET status='sent',sent_at=? WHERE id=?").bind(now(),q.id).run();
+    await env.DB.prepare("UPDATE quotes SET status='sent',sent_at=? WHERE id=? AND status='draft'").bind(now(),q.id).run();
     return json({ok:true,emailSent:emailOk,smsSent:smsOk,acceptUrl:link},200,env);
    }
    const getMatch=path.match(/^\/api\/quotes\/([^/]+)$/);
