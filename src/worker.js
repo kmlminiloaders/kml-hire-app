@@ -17,18 +17,19 @@ const ACCESS_ISSUER="https://quiet-paper-7c30.cloudflareaccess.com";
 const ACCESS_AUD="7d87ccd8a3327cd5bf8e85788ad63121f79fb446470f6f2a0822b5aecc30165a";
 function accessBytes(s){if(!/^[A-Za-z0-9_-]+$/.test(s))throw Error("Invalid token");return Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(s.length/4)*4,"=")),c=>c.charCodeAt(0))}
 async function verifyAccess(req){
+ const fail=reason=>{console.warn('KML Access verification: '+reason);return false;};
  try{
   const raw=req.headers.get("Cf-Access-Jwt-Assertion")||"";
-  if(!raw||raw.length>16384)return false;
-  const parts=raw.split(".");if(parts.length!==3)return false;
+  if(!raw)return fail("missing assertion");if(raw.length>16384)return fail("assertion too large");
+  const parts=raw.split(".");if(parts.length!==3)return fail("malformed assertion");
   const decode=s=>JSON.parse(new TextDecoder().decode(accessBytes(s)));
   const h=decode(parts[0]),p=decode(parts[1]),t=Math.floor(Date.now()/1000);
-  if(h.alg!=="RS256"||typeof h.kid!=="string"||p.iss!==ACCESS_ISSUER||!Array.isArray(p.aud)||!p.aud.includes(ACCESS_AUD)||!Number.isFinite(p.exp)||p.exp<=t||!Number.isFinite(p.iat)||p.iat>t+60||(p.nbf!==undefined&&(!Number.isFinite(p.nbf)||p.nbf>t))||typeof p.email!=="string"||!p.email||typeof p.sub!=="string"||!p.sub)return false;
-  const res=await fetch(ACCESS_ISSUER+"/cdn-cgi/access/certs",{redirect:"error"});if(!res.ok)return false;
-  const {keys}=await res.json();const jwk=keys.find(k=>k.kid===h.kid&&k.kty==="RSA");if(!jwk)return false;
+  if(h.alg!=="RS256"||typeof h.kid!=="string")return fail("header");if(p.iss!==ACCESS_ISSUER)return fail("issuer");if(!Array.isArray(p.aud)||!p.aud.includes(ACCESS_AUD))return fail("audience");if(!Number.isFinite(p.exp)||p.exp<=t||!Number.isFinite(p.iat)||p.iat>t+60||(p.nbf!==undefined&&(!Number.isFinite(p.nbf)||p.nbf>t))||typeof p.email!=="string"||!p.email||typeof p.sub!=="string"||!p.sub)return fail("claims");
+  const res=await fetch(ACCESS_ISSUER+"/cdn-cgi/access/certs",{redirect:"error"});if(!res.ok)return fail("key endpoint");
+  const {keys}=await res.json();const jwk=keys.find(k=>k.kid===h.kid&&k.kty==="RSA");if(!jwk)return fail("key not found");
   const key=await crypto.subtle.importKey("jwk",jwk,{name:"RSASSA-PKCS1-v1_5",hash:"SHA-256"},false,["verify"]);
-  return await crypto.subtle.verify("RSASSA-PKCS1-v1_5",key,accessBytes(parts[2]),new TextEncoder().encode(parts[0]+"."+parts[1]));
- }catch{return false}
+  const valid=await crypto.subtle.verify("RSASSA-PKCS1-v1_5",key,accessBytes(parts[2]),new TextEncoder().encode(parts[0]+"."+parts[1]));return valid||fail("signature");
+ }catch{return fail("verification exception")}
 }
 async function admin(req,env){if(new URL(req.url).hostname===ACCESS_HOST)return verifyAccess(req);const got=req.headers.get("X-KML-Key")||"",want=env.KML_ADMIN_KEY||"";if(!want||got.length!==want.length)return false;let diff=0;for(let i=0;i<got.length;i++)diff|=got.charCodeAt(i)^want.charCodeAt(i);return diff===0;}
 async function sendEmail(env,to,subject,htmlBody,textBody,attachments,idem){
