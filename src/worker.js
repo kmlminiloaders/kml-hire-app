@@ -28,7 +28,7 @@ async function verifyAccess(req){
   const h=decode(parts[0]),p=decode(parts[1]),t=Math.floor(Date.now()/1000);
   if(h.alg!=="RS256"||typeof h.kid!=="string")return fail("header");if(p.iss!==ACCESS_ISSUER)return fail("issuer");if(!Array.isArray(p.aud)||!p.aud.includes(ACCESS_AUD))return fail("audience");if(!Number.isFinite(p.exp)||p.exp<=t||!Number.isFinite(p.iat)||p.iat>t+60||(p.nbf!==undefined&&(!Number.isFinite(p.nbf)||p.nbf>t))||typeof p.email!=="string"||!p.email||typeof p.sub!=="string"||!p.sub)return fail("claims");
   stage='fetch signing keys';
-  const res=await fetch(ACCESS_ISSUER+"/cdn-cgi/access/certs",{redirect:"error"});if(!res.ok)return fail("key endpoint");
+  const res=await fetch(ACCESS_ISSUER+"/cdn-cgi/access/certs",{redirect:"manual"});if(!res.ok)return fail("key endpoint");
   stage='parse signing keys';
   const {keys}=await res.json();const jwk=keys.find(k=>k.kid===h.kid&&k.kty==="RSA");if(!jwk)return fail("key not found");
   stage='import signing key';
