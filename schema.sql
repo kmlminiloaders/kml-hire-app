@@ -25,3 +25,11 @@ CREATE TABLE IF NOT EXISTS quotes (
 );
 CREATE INDEX IF NOT EXISTS idx_quotes_created ON quotes(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_quotes_token ON quotes(token);
+
+CREATE TABLE IF NOT EXISTS invoices (
+ number INTEGER PRIMARY KEY AUTOINCREMENT,
+ job_id TEXT NOT NULL UNIQUE,
+ payload TEXT NOT NULL,
+ created_at TEXT NOT NULL,
+ sent_at TEXT
+);
