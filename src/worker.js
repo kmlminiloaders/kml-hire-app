@@ -1,6 +1,6 @@
 const cors = (env) => ({
   "Access-Control-Allow-Origin": env.APP_ORIGIN || "*",
-  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+  "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type,X-KML-Key",
   "Access-Control-Max-Age": "86400"
 });
@@ -41,13 +41,13 @@ export default {
   if(req.method==="OPTIONS")return new Response(null,{headers:cors(env)});
   if(path==="/api/health")return json({ok:true,service:"KML Hire API"},200,env);
   if(path.startsWith("/q/")&&req.method==="GET"){
-   const t=path.slice(3);const q=await env.DB.prepare("SELECT * FROM quotes WHERE token=?").bind(t).first();
+   const t=path.slice(3);const q=await env.DB.prepare("SELECT * FROM quotes WHERE token=? AND status!='deleted'").bind(t).first();
    return q?quotePage(q,env):html("<h2>Quote not found or link expired.</h2>",404);
   }
   if(path.startsWith("/api/accept/")&&req.method==="POST"){
    const t=path.slice("/api/accept/".length);let b;try{b=await req.json()}catch{return json({error:"Invalid request"},400,env)}
    if(!b.agree||!String(b.name||"").trim())return json({error:"Enter your name and accept the terms."},400,env);
-   const q=await env.DB.prepare("SELECT * FROM quotes WHERE token=?").bind(t).first();
+   const q=await env.DB.prepare("SELECT * FROM quotes WHERE token=? AND status!='deleted'").bind(t).first();
    if(!q)return json({error:"Quote not found"},404,env);
    if(q.status==="accepted")return json({ok:true,status:"accepted"},200,env);
    if(q.status!=="sent")return json({error:"This quote is not currently open for acceptance."},409,env);
@@ -61,7 +61,7 @@ export default {
   if(path.startsWith("/api/")){
    if(!await admin(req,env))return json({error:"Unauthorised. Check your KML API key in app settings."},401,env);
    if(path==="/api/quotes"&&req.method==="GET"){
-    const {results}=await env.DB.prepare("SELECT id,quote_number,status,customer,email,phone,job_date,hire_type,total,created_at,sent_at,accepted_at,accepted_by FROM quotes ORDER BY created_at DESC LIMIT 250").all();
+    const {results}=await env.DB.prepare("SELECT id,quote_number,status,customer,email,phone,job_date,hire_type,total,created_at,sent_at,accepted_at,accepted_by FROM quotes WHERE status!='deleted' ORDER BY created_at DESC LIMIT 250").all();
     return json({quotes:results},200,env);
    }
    if(path==="/api/quotes"&&req.method==="POST"){
@@ -102,8 +102,12 @@ export default {
     return json({ok:true,emailSent:emailOk,smsSent:smsOk,acceptUrl:link},200,env);
    }
    const getMatch=path.match(/^\/api\/quotes\/([^/]+)$/);
+   if(getMatch&&req.method==="DELETE"){
+    const q=await env.DB.prepare("UPDATE quotes SET status='deleted' WHERE id=? RETURNING id").bind(getMatch[1]).first();
+    return q?json({ok:true},200,env):json({error:"Quote not found"},404,env);
+   }
    if(getMatch&&req.method==="GET"){
-    const q=await env.DB.prepare("SELECT id,quote_number,status,customer,email,phone,job_date,hire_type,total,created_at,sent_at,accepted_at,accepted_by FROM quotes WHERE id=?").bind(getMatch[1]).first();
+    const q=await env.DB.prepare("SELECT id,quote_number,status,customer,email,phone,job_date,hire_type,total,created_at,sent_at,accepted_at,accepted_by FROM quotes WHERE id=? AND status!='deleted'").bind(getMatch[1]).first();
     return q?json(q,200,env):json({error:"Quote not found"},404,env);
    }
   }
