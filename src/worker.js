@@ -89,6 +89,24 @@ export default {
   }
   if(path.startsWith("/api/")){
    if(!await admin(req,env))return json({error:"Unauthorised. Check your KML API key in app settings."},401,env);
+   const hm=path.match(/^\/api\/handover-drafts\/([a-zA-Z0-9_-]{1,80})$/);
+   if(hm&&req.method==="GET"){
+    const row=await env.DB.prepare("SELECT * FROM handover_drafts WHERE job_id=?").bind(hm[1]).first();
+    return json(row?{record:JSON.parse(row.payload),revision:row.revision,updatedAt:row.updated_at}:{record:null,revision:0},200,env);
+   }
+   if(hm&&req.method==="POST"){
+    let b;try{const raw=await req.text();if(raw.length>50000)return json({error:"Draft too large"},413,env);b=JSON.parse(raw)}catch{return json({error:"Invalid JSON"},400,env)}
+    if(!b||!Number.isSafeInteger(b.revision)||b.revision<0||!b.record||typeof b.record!=="object"||Array.isArray(b.record))return json({error:"Invalid draft"},400,env);
+    const x=b.record,record={};
+    for(const k of ["customer","status","trainer","out","due","back","fuel","notesOut","notesBack","safetyVersion","inductionAt","collectedAt","returnedAt","start","end"])if(typeof x[k]==="string")record[k]=x[k].slice(0,2000);
+    for(const k of ["bond","held","refund","retained","allowance","used","excess"])if(typeof x[k]==="number"&&Number.isFinite(x[k]))record[k]=x[k];
+    record.cleaning=x.cleaning===true;
+    for(const k of ["checksOut","checksBack","safety"])if(Array.isArray(x[k]))record[k]=x[k].filter(Number.isSafeInteger).slice(0,100);
+    record.inspections={};for(const side of ["out","back"])if(Array.isArray(x.inspections?.[side]))record.inspections[side]=x.inspections[side].slice(0,20).map(v=>({item:String(v?.item||"").slice(0,150),condition:["Not checked","OK","Issue","Not applicable"].includes(v?.condition)?v.condition:"Not checked",notes:String(v?.notes||"").slice(0,1000)}));
+    const payload=JSON.stringify(record),at=now();
+    const row=b.revision===0?await env.DB.prepare("INSERT INTO handover_drafts(job_id,payload,updated_at) VALUES(?,?,?) ON CONFLICT(job_id) DO NOTHING RETURNING revision,updated_at").bind(hm[1],payload,at).first():await env.DB.prepare("UPDATE handover_drafts SET payload=?,revision=revision+1,updated_at=? WHERE job_id=? AND revision=? RETURNING revision,updated_at").bind(payload,at,hm[1],b.revision).first();
+    return row?json({revision:row.revision,updatedAt:row.updated_at},200,env):json({error:"Cloud draft changed. Load the cloud copy before saving again."},409,env);
+   }
    if(path==="/api/invoices"&&req.method==="GET"){
     const {results}=await env.DB.prepare("SELECT number,job_id,payload,created_at,sent_at FROM invoices ORDER BY number DESC LIMIT 250").all();
     return json({invoices:results.map(x=>({...x,payload:JSON.parse(x.payload)}))},200,env);
