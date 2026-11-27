@@ -33,3 +33,10 @@ CREATE TABLE IF NOT EXISTS invoices (
  created_at TEXT NOT NULL,
  sent_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS handover_drafts (
+ job_id TEXT PRIMARY KEY,
+ payload TEXT NOT NULL,
+ revision INTEGER NOT NULL DEFAULT 1,
+ updated_at TEXT NOT NULL
+);
