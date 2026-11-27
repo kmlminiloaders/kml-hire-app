@@ -117,6 +117,7 @@ export default {
     await sendEmail(env,q.email,"KML booking request received: "+q.quote_number,"<p>Thanks "+esc(String(b.name).trim())+".</p><p>KML Mini Loaders has received your acceptance of quote <b>"+esc(q.quote_number)+"</b> for "+aud(q.total)+". We will be in touch to confirm scheduling and any deposit arrangements.</p><p>Call "+esc(env.BUSINESS_PHONE||"0413 195 915")+" if you have any questions.</p>","Thanks "+b.name+". KML Mini Loaders has received your acceptance of quote "+q.quote_number+". We will be in touch to confirm scheduling.");
    return json({ok:true,status:"accepted"},200,env);
   }
+  if(url.hostname==="quotes.kmlminiloaders.com.au")return json({error:"Not found"},404,env);
   if(path.startsWith("/api/")){
    if(!await admin(req,env))return json({error:"Unauthorised. Check your KML API key in app settings."},401,env);
    const hm=path.match(/^\/api\/handover-drafts\/([a-zA-Z0-9_-]{1,80})$/);
@@ -183,12 +184,12 @@ export default {
       ?json({error:"Only draft or sent quotes can be shared."},409,env)
       :json({error:"Quote not found"},404,env);
     }
-    return json({status:quote.status,sentAt:quote.sent_at,acceptUrl:(url.hostname===ACCESS_HOST?"https://kml-hire-api.shaun-6b8.workers.dev":url.origin)+"/q/"+quote.token},200,env);
+    return json({status:quote.status,sentAt:quote.sent_at,acceptUrl:"https://quotes.kmlminiloaders.com.au"+"/q/"+quote.token},200,env);
    }
    const sendMatch=path.match(/^\/api\/quotes\/([^/]+)\/send$/);
    if(sendMatch&&req.method==="POST"){
     const q=await env.DB.prepare("SELECT * FROM quotes WHERE id=?").bind(sendMatch[1]).first();if(!q)return json({error:"Quote not found"},404,env);if(q.status!=="draft")return json({error:"Only draft quotes can be sent. This quote is already "+q.status+"."},409,env);
-    const link=(url.hostname===ACCESS_HOST?"https://kml-hire-api.shaun-6b8.workers.dev":url.origin)+"/q/"+q.token;const total=aud(q.total);
+    const link="https://quotes.kmlminiloaders.com.au"+"/q/"+q.token;const total=aud(q.total);
     const lines=JSON.parse(q.items_json||"[]").map(x=>x.description+" — "+aud(x.amount)).join("\n");
     const textBody="KML Mini Loaders quote "+q.quote_number+"\nHi "+q.customer+",\n\n"+lines+"\nTotal: "+total+"\nView and accept your quote: "+link+"\n\nQuestions? Call "+(env.BUSINESS_PHONE||"KML Mini Loaders");
     let emailOk=false,smsOk=false;
