@@ -1,3 +1,4 @@
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 const cors = (env) => ({
   "Access-Control-Allow-Origin": env.APP_ORIGIN || "*",
   "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
@@ -11,9 +12,9 @@ const aud = n => new Intl.NumberFormat("en-AU",{style:"currency",currency:"AUD"}
 const now = () => new Date().toISOString();
 const token = () => Array.from(crypto.getRandomValues(new Uint8Array(24)),b=>b.toString(16).padStart(2,"0")).join("");
 async function admin(req,env){const got=req.headers.get("X-KML-Key")||"",want=env.KML_ADMIN_KEY||"";if(!want||got.length!==want.length)return false;let diff=0;for(let i=0;i<got.length;i++)diff|=got.charCodeAt(i)^want.charCodeAt(i);return diff===0;}
-async function sendEmail(env,to,subject,htmlBody,textBody){
+async function sendEmail(env,to,subject,htmlBody,textBody,attachments,idem){
  if(!env.RESEND_API_KEY||!to)return false;
- const r=await fetch("https://api.resend.com/emails",{method:"POST",headers:{"Authorization":"Bearer "+env.RESEND_API_KEY,"Content-Type":"application/json"},body:JSON.stringify({from:env.EMAIL_FROM||"KML Mini Loaders <quotes@kmlminiloaders.com.au>",to:[to],subject,html:htmlBody,text:textBody})});
+ const r=await fetch("https://api.resend.com/emails",{method:"POST",headers:{"Authorization":"Bearer "+env.RESEND_API_KEY,"Content-Type":"application/json",...(idem?{"Idempotency-Key":idem}:{})},body:JSON.stringify({attachments,from:env.EMAIL_FROM||"KML Mini Loaders <quotes@kmlminiloaders.com.au>",to:[to],subject,html:htmlBody,text:textBody})});
  return r.ok;
 }
 async function sendSms(env,to,body){
@@ -34,6 +35,24 @@ function quotePage(q,env){
  <p class="muted" style="text-align:center">KML Mini Loaders · Kendenup, Western Australia · ${esc(env.BUSINESS_PHONE||"")}</p></div>
  ${accepted||q.status==="declined"?"":'<script>document.getElementById("accept").addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.target);const b=document.querySelector("button");b.disabled=true;b.textContent="Submitting...";try{const r=await fetch("/api/accept/'+q.token+'",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:f.get("name"),agree:f.get("agree")==="on"})});const d=await r.json();if(!r.ok)throw Error(d.error||"Could not submit");location.reload()}catch(x){document.getElementById("msg").textContent=x.message;b.disabled=false;b.textContent="ACCEPT QUOTE"}})</script>'}
  </html>`);
+}
+async function invoicePDF(i,n){
+ const doc=await PDFDocument.create(),page=doc.addPage([595,842]),font=await doc.embedFont(StandardFonts.Helvetica),bold=await doc.embedFont(StandardFonts.HelveticaBold);
+ const clean=v=>String(v??"").replace(/[^\x20-\x7E]/g,"?");
+ const draw=(v,x,y,size=12,f=font,color=rgb(.12,.16,.17))=>page.drawText(clean(v),{x,y,size,font:f,color});
+ page.drawRectangle({x:0,y:730,width:595,height:112,color:rgb(.06,.12,.13)});
+ draw("KML | KENDENUP MINI LOADERS",42,785,22,bold,rgb(.2,.85,.8));
+ draw("INVOICE "+n,42,748,17,bold,rgb(1,1,1));
+ draw("ABN: "+i.abn,42,700);draw("Issued: "+i.date+"   Due: "+i.due,42,675);
+ draw("Bill to: "+i.customer,42,630,15,bold);draw(i.email,42,605);
+ draw("Job date: "+i.jobDate,42,575);draw(i.description,42,545);
+ page.drawLine({start:{x:42,y:520},end:{x:553,y:520},thickness:1,color:rgb(.1,.6,.6)});
+ draw("TOTAL DUE",42,480,17,bold);draw(aud(i.total),390,480,20,bold);
+ draw("No GST charged",42,450);
+ draw("Payment: bank transfer",42,390,15,bold);
+ draw("Account: "+i.accountName,42,365);draw("BSB: "+i.bsb+"   Account: "+i.account,42,340);
+ draw("Reference: "+n,42,315);draw("Thank you for supporting a local business!",42,80);
+ return doc.saveAsBase64();
 }
 export default {
  async fetch(req,env){
@@ -60,6 +79,26 @@ export default {
   }
   if(path.startsWith("/api/")){
    if(!await admin(req,env))return json({error:"Unauthorised. Check your KML API key in app settings."},401,env);
+   if(path==="/api/invoices"&&req.method==="GET"){
+    const {results}=await env.DB.prepare("SELECT number,job_id,payload,created_at,sent_at FROM invoices ORDER BY number DESC LIMIT 250").all();
+    return json({invoices:results.map(x=>({...x,payload:JSON.parse(x.payload)}))},200,env);
+   }
+   if(path==="/api/invoices"&&req.method==="POST"){
+    let i;try{i=await req.json()}catch{return json({error:"Invalid JSON"},400,env)}
+    const fields={jobId:80,customer:80,email:120,abn:20,date:10,due:10,jobDate:10,description:80,accountName:60,bsb:12,account:20};
+    if(!i||Object.entries(fields).some(([k,max])=>typeof i[k]!=="string"||!i[k].trim()||i[k].length>max||/[^\x20-\x7E]/.test(i[k]))||!Number.isFinite(i.total)||i.total<=0||i.total>1000000||!/^\S+@\S+\.\S+$/.test(i.email)||i.gst!==false)return json({error:"Complete all invoice fields. This version supports non-GST invoices only."},400,env);
+    const payload=JSON.stringify(Object.fromEntries([...Object.keys(fields),"total","gst"].map(k=>[k,i[k]])));
+    await env.DB.prepare("INSERT INTO invoices(job_id,payload,created_at) VALUES(?,?,?) ON CONFLICT(job_id) DO NOTHING").bind(i.jobId,payload,now()).run();
+    const row=await env.DB.prepare("SELECT * FROM invoices WHERE job_id=?").bind(i.jobId).first();
+    const n="INV-"+String(row.number).padStart(4,"0");
+    if(row.payload!==payload)return json({error:"An invoice already exists for this job. Original details are retained; open the invoice register."},409,env);
+    if(row.sent_at)return json({ok:true,number:n,sentAt:row.sent_at},200,env);
+    const pdf=await invoicePDF(i,n);
+    const ok=await sendEmail(env,i.email,"KML invoice "+n,"<p>Hi "+esc(i.customer)+",</p><p>Your invoice is attached. Total due: "+aud(i.total)+".</p><p>Thank you for choosing KML.</p>","Your KML invoice "+n+" is attached. Total due: "+aud(i.total),[{filename:n+".pdf",content:pdf}],"kml-invoice-"+row.number);
+    if(!ok)return json({error:"Invoice saved but email failed. Retry with the same details."},502,env);
+    const at=now();await env.DB.prepare("UPDATE invoices SET sent_at=? WHERE number=?").bind(at,row.number).run();
+    return json({ok:true,number:n,sentAt:at},200,env);
+   }
    if(path==="/api/quotes"&&req.method==="GET"){
     const {results}=await env.DB.prepare("SELECT id,quote_number,status,customer,email,phone,job_date,hire_type,total,created_at,sent_at,accepted_at,accepted_by FROM quotes WHERE status!='deleted' ORDER BY created_at DESC LIMIT 250").all();
     return json({quotes:results},200,env);
