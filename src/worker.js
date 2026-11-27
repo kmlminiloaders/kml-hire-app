@@ -24,34 +24,44 @@ async function sendSms(env,to,body){
  const r=await fetch("https://api.twilio.com/2010-04-01/Accounts/"+env.TWILIO_ACCOUNT_SID+"/Messages.json",{method:"POST",headers:{"Authorization":"Basic "+auth,"Content-Type":"application/x-www-form-urlencoded"},body:form});
  return r.ok;
 }
+const brandLogo="<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 300 150\" role=\"img\" aria-label=\"Kendenup Mini Loaders\"><path d=\"M8 76 L83 14 L111 38 L150 3 L185 36 L203 22 L292 76\" fill=\"#101719\" stroke=\"#19b7b0\" stroke-width=\"5\"/><path d=\"M60 40 L83 20 L99 37 L83 31 Z M120 35 L150 9 L177 36 L151 25 Z M185 42 L203 28 L224 46 L203 38 Z\" fill=\"white\"/><text x=\"150\" y=\"91\" text-anchor=\"middle\" font-family=\"Georgia,serif\" font-weight=\"bold\" font-size=\"76\" fill=\"#101719\" stroke=\"white\" stroke-width=\"1\">KML</text><text x=\"150\" y=\"118\" text-anchor=\"middle\" font-family=\"Arial,sans-serif\" font-weight=\"bold\" font-size=\"23\" fill=\"#101719\">KENDENUP</text><text x=\"150\" y=\"140\" text-anchor=\"middle\" font-family=\"Arial,sans-serif\" font-weight=\"bold\" font-size=\"19\" fill=\"#087c79\">MINI LOADERS</text></svg>";
 function quotePage(q,env){
  const items=JSON.parse(q.items_json||"[]");
  const rows=items.map(x=>'<tr><td>'+esc(x.description)+'</td><td>'+esc(x.quantity||1)+'</td><td>'+aud(x.amount)+'</td></tr>').join("");
  const accepted=q.status==="accepted";
  return html(`<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101719"><title>KML Quote ${esc(q.quote_number)}</title>
  <style>*{box-sizing:border-box}body{margin:0;background:#101719;color:#f4f7f7;font:16px system-ui;padding:18px}.wrap{max-width:680px;margin:auto}.card{background:#192326;border:1px solid #344447;border-radius:16px;padding:20px;margin:14px 0}.brand{color:#16b7ad;font-weight:800;letter-spacing:1px}.muted{color:#a9b8b8;font-size:13px}h1{font-size:24px;margin:8px 0}table{width:100%;border-collapse:collapse;margin:20px 0}td,th{text-align:left;padding:12px 6px;border-bottom:1px solid #344447}th{color:#a9b8b8}.total{font-size:28px;font-weight:800;color:#16b7ad;text-align:right}.btn{background:#16b7ad;color:#062321;border:0;border-radius:10px;padding:14px 18px;font-size:17px;font-weight:800;width:100%;margin-top:14px}input{width:100%;padding:13px;border-radius:9px;border:1px solid #344447;background:#0d1416;color:white;margin:7px 0 14px}label{font-size:14px;color:#c7d2d2}.success{color:#75d6a5;font-weight:800}</style>
- <div class="wrap"><div class="card"><div class="brand">KML · KENDENUP MINI LOADERS</div><p class="muted">QUOTE ${esc(q.quote_number)}</p><h1>Hire quote</h1><p>Prepared for <b>${esc(q.customer)}</b></p><p class="muted">Quote date: ${esc(q.created_at.slice(0,10))} · Job date: ${esc(q.job_date||"To be confirmed")}</p><p>${esc(q.description||"Mini loader hire")}</p><p class="muted">${esc(q.location||"")}</p><table><thead><tr><th>Description</th><th>Qty</th><th>Amount</th></tr></thead><tbody>${rows}</tbody></table><div class="total">Total: ${aud(q.total)}</div><p class="muted">GST is not charged unless shown and KML is registered for GST.</p>${q.notes?'<p><b>Notes:</b> '+esc(q.notes)+'</p>':""}${q.terms?'<p><b>Terms:</b><br>'+esc(q.terms).replace(/\n/g,"<br>")+'</p>':""}<p class="muted">Questions? Call ${esc(env.BUSINESS_PHONE||"KML Mini Loaders")}.</p></div>
+ <div class="wrap"><div class="card"><div style="background:white;border-radius:10px;padding:12px;max-width:270px;margin-bottom:18px">${brandLogo}</div><p class="muted">QUOTE ${esc(q.quote_number)}</p><h1>Hire quote</h1><p>Prepared for <b>${esc(q.customer)}</b></p><p class="muted">Quote date: ${esc(q.created_at.slice(0,10))} · Job date: ${esc(q.job_date||"To be confirmed")}</p><p>${esc(q.description||"Mini loader hire")}</p><p class="muted">${esc(q.location||"")}</p><table><thead><tr><th>Description</th><th>Qty</th><th>Amount</th></tr></thead><tbody>${rows}</tbody></table><div class="total">Total: ${aud(q.total)}</div><p class="muted">GST is not charged unless shown and KML is registered for GST.</p>${q.notes?'<p><b>Notes:</b> '+esc(q.notes)+'</p>':""}${q.terms?'<p><b>Terms:</b><br>'+esc(q.terms).replace(/\n/g,"<br>")+'</p>':""}<p class="muted">Questions? Call ${esc(env.BUSINESS_PHONE||"KML Mini Loaders")}.</p></div>
  <div class="card">${accepted?'<p class="success">✓ QUOTE ACCEPTED</p><p>Thank you, '+esc(q.accepted_by)+'. Your acceptance was recorded on '+esc(q.accepted_at)+'.</p>':q.status==="declined"?'<p>This quote has been declined.</p>':'<h2>Accept this quote</h2><p class="muted">By accepting, you confirm that you agree to the quote and the terms shown above.</p><form id="accept"><label>Your full name</label><input name="name" required maxlength="120" autocomplete="name"><label><input type="checkbox" name="agree" required style="width:auto"> I accept this quote and the terms above.</label><button class="btn">ACCEPT QUOTE</button><p id="msg" class="muted"></p></form>'}</div>
  <p class="muted" style="text-align:center">KML Mini Loaders · Kendenup, Western Australia · ${esc(env.BUSINESS_PHONE||"")}</p></div>
  ${accepted||q.status==="declined"?"":'<script>document.getElementById("accept").addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.target);const b=document.querySelector("button");b.disabled=true;b.textContent="Submitting...";try{const r=await fetch("/api/accept/'+q.token+'",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:f.get("name"),agree:f.get("agree")==="on"})});const d=await r.json();if(!r.ok)throw Error(d.error||"Could not submit");location.reload()}catch(x){document.getElementById("msg").textContent=x.message;b.disabled=false;b.textContent="ACCEPT QUOTE"}})</script>'}
  </html>`);
 }
 async function invoicePDF(i,n){
- const doc=await PDFDocument.create(),page=doc.addPage([595,842]),font=await doc.embedFont(StandardFonts.Helvetica),bold=await doc.embedFont(StandardFonts.HelveticaBold);
+ const doc=await PDFDocument.create(),page=doc.addPage([595,842]),font=await doc.embedFont(StandardFonts.Helvetica),bold=await doc.embedFont(StandardFonts.HelveticaBold),serif=await doc.embedFont(StandardFonts.TimesRomanBold);
+ const dark=rgb(.06,.12,.13),teal=rgb(.03,.48,.47),white=rgb(1,1,1),pale=rgb(.92,.96,.96);
  const clean=v=>String(v??"").replace(/[^\x20-\x7E]/g,"?");
- const draw=(v,x,y,size=12,f=font,color=rgb(.12,.16,.17))=>page.drawText(clean(v),{x,y,size,font:f,color});
- page.drawRectangle({x:0,y:730,width:595,height:112,color:rgb(.06,.12,.13)});
- draw("KML | KENDENUP MINI LOADERS",42,785,22,bold,rgb(.2,.85,.8));
- draw("INVOICE "+n,42,748,17,bold,rgb(1,1,1));
- draw("ABN: "+i.abn,42,700);draw("Issued: "+i.date+"   Due: "+i.due,42,675);
- draw("Bill to: "+i.customer,42,630,15,bold);draw(i.email,42,605);
- draw("Job date: "+i.jobDate,42,575);draw(i.description,42,545);
- page.drawLine({start:{x:42,y:520},end:{x:553,y:520},thickness:1,color:rgb(.1,.6,.6)});
- draw("TOTAL DUE",42,480,17,bold);draw(aud(i.total),390,480,20,bold);
- draw("No GST charged",42,450);
- draw("Payment: bank transfer",42,390,15,bold);
- draw("Account: "+i.accountName,42,365);draw("BSB: "+i.bsb+"   Account: "+i.account,42,340);
- draw("Reference: "+n,42,315);draw("Thank you for supporting a local business!",42,80);
+ const draw=(v,x,y,size=12,f=font,color=dark,max=510)=>{const t=clean(v);while(size>6&&f.widthOfTextAtSize(t,size)>max)size-=.5;page.drawText(t,{x,y,size,font:f,color});};
+ const rect=(x,y,width,height,color)=>page.drawRectangle({x,y,width,height,color});
+ const date=v=>/^\d{4}-\d{2}-\d{2}$/.test(v)?v.slice(8,10)+"/"+v.slice(5,7)+"/"+v.slice(0,4):v;
+ rect(0,710,595,132,dark);rect(0,710,595,5,teal);
+ page.drawSvgPath("M 0 45 L 48 5 L 72 23 L 106 0 L 134 23 L 151 12 L 204 45 Z",{x:35,y:826,color:teal});
+ draw("KML",75,759,47,serif,white);draw("KENDENUP MINI LOADERS",35,738,12,bold,white);draw("WET OR DRY HIRE",35,721,9,bold,white);
+ draw("INVOICE",365,782,29,bold,white);draw(n,365,751,19,bold,white);
+ draw("ABN: "+i.abn,35,688,10);
+ rect(35,568,270,103,pale);rect(315,568,245,103,pale);rect(35,647,270,24,teal);rect(315,647,245,24,teal);
+ draw("BILL TO",46,655,11,bold,white);draw("INVOICE DETAILS",326,655,11,bold,white);
+ draw(i.customer,46,625,15,bold,dark,248);draw(i.email,46,601,11,font,dark,248);
+ draw("Issued: "+date(i.date),326,625,11);draw("Due: "+date(i.due),326,605,11);draw("Job date: "+date(i.jobDate),326,585,11);
+ rect(35,516,525,28,dark);draw("DESCRIPTION",46,526,11,bold,white);draw("AMOUNT",465,526,11,bold,white);
+ rect(35,466,525,50,pale);draw(i.description,46,487,12,bold,dark,375);draw(aud(i.total),440,487,13,bold,dark,110);
+ draw("No GST charged",35,437,11);rect(300,410,260,43,teal);draw("TOTAL DUE",311,426,13,bold,white);draw(aud(i.total),435,425,18,bold,white,115);
+ rect(35,245,525,130,pale);rect(35,350,525,25,teal);draw("PAYMENT DETAILS - BANK TRANSFER",46,359,11,bold,white);
+ draw("Account name: "+i.accountName,46,329,12);draw("BSB: "+i.bsb,46,307,12);draw("Account number: "+i.account,46,285,12);draw("Payment reference: "+n,46,263,12,bold);
+ rect(0,0,595,88,dark);rect(0,88,595,4,teal);
+ draw("Thank you for supporting a local business!",35,61,16,bold,white);
+ draw("0413 195 915 | shaun@kmlminiloaders.com.au",35,38,11,font,white);
+ draw("www.kmlminiloaders.com.au | Kendenup, Western Australia",35,19,10,font,white);
  return doc.saveAsBase64();
 }
 export default {
