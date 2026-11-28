@@ -37,7 +37,7 @@ async function verifyAccess(req){
   const valid=await crypto.subtle.verify("RSASSA-PKCS1-v1_5",key,accessBytes(parts[2]),new TextEncoder().encode(parts[0]+"."+parts[1]));return valid||fail("signature");
  }catch{return fail("verification exception at "+stage)}
 }
-async function admin(req,env){if(new URL(req.url).hostname===ACCESS_HOST)return verifyAccess(req);const got=req.headers.get("X-KML-Key")||"",want=env.KML_ADMIN_KEY||"";if(!want||got.length!==want.length)return false;let diff=0;for(let i=0;i<got.length;i++)diff|=got.charCodeAt(i)^want.charCodeAt(i);return diff===0;}
+async function admin(req,env){if(new URL(req.url).hostname===ACCESS_HOST){if(req.method!=="GET"&&req.headers.get("Origin")!=="https://"+ACCESS_HOST)return false;return verifyAccess(req);}if(env.KML_PRIVATE_ONLY==="true")return false;const got=req.headers.get("X-KML-Key")||"",want=env.KML_ADMIN_KEY||"";if(!want||got.length!==want.length)return false;let diff=0;for(let i=0;i<got.length;i++)diff|=got.charCodeAt(i)^want.charCodeAt(i);return diff===0;}
 async function sendEmail(env,to,subject,htmlBody,textBody,attachments,idem){
  if(!env.RESEND_API_KEY||!to)return false;
  const r=await fetch("https://api.resend.com/emails",{method:"POST",headers:{"Authorization":"Bearer "+env.RESEND_API_KEY,"Content-Type":"application/json",...(idem?{"Idempotency-Key":idem}:{})},body:JSON.stringify({attachments,from:env.EMAIL_FROM||"KML Mini Loaders <quotes@kmlminiloaders.com.au>",to:[to],subject,html:htmlBody,text:textBody})});
